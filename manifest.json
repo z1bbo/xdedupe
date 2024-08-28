@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "XDedupe",
+  "version": "0.1",
+  "description": "Never get the same tweet recommended twice! Deduplicates your X timeline by removing already seen tweets.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/", "https://x.com/home", "https://x.com/home*"],
+      "js": ["main.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  }
+}
