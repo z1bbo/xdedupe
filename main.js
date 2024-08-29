@@ -7,7 +7,7 @@ const seen = new Map();
 const childRemovedFlags = new Map();
 let newCount = 0;
 let lastScrollTime = 0;
-let lastTweet = null;
+let oldTweets = [];
 let lastScrollY = 0;
 let lastRemoveTime = 0;
 
@@ -15,8 +15,6 @@ let isNavigatingBack = false;
 
 function handleScroll() {
   if (window.location.pathname !== "/home") {
-    console.log("bad page, doing nothing");
-    lastTweet = null;
     return;
   }
   const now = Date.now();
@@ -26,13 +24,7 @@ function handleScroll() {
     return;
   }
   const scrollDistance = window.scrollY - lastScrollY;
-  if (scrollDistance < 0) {
-    console.log("window.scrollY ", window.scrollY, " lastScrollY", lastScrollY);
-    //console.log("scrolling up (TODO rem log)");
-    return;
-  }
   if (scrollDistance * 333 / msSinceLastScroll > window.innerHeight) {
-    console.log("scrolling too fast - more than 3 screens per second (TODO rem log)");
     lastScrollTime = now;
     lastScrollY = window.scrollY;
     return;
@@ -45,28 +37,21 @@ function handleScroll() {
 }
 
 function handleScrollTweetTransition() {
-  const currentTweet = getBottomShowingTweet();    
-  if (currentTweet !== lastTweet) {
-    if (lastTweet) {
-      addSeen(lastTweet);
+  for (const tweet of oldTweets) {
+    const rect = tweet.getBoundingClientRect();
+    if (rect.height > 0 && rect.width > 0 &&rect.bottom < 160) {
+      addSeen(tweet);
     }
-    lastTweet = currentTweet;
   }
-}
-
-function getBottomShowingTweet() {
-    const tweets = getTweets();
-    for (const tweet of tweets) {
-        const rect = tweet.getBoundingClientRect();
-        if (rect.bottom > 160) {
-          return tweet;
-        }
-    }
-    return null;
+  oldTweets = getTweets();
 }
 
 function getTweets() {
-  return document.querySelectorAll('article[role="article"][data-testid="tweet"]');
+  const tweets = document.querySelectorAll('article[role="article"][data-testid="tweet"]');
+  return Array.from(tweets).filter(tweet => {
+    const rect = tweet.getBoundingClientRect();
+    return rect.bottom >= 160;
+  });
 }
 
 function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
@@ -103,7 +88,8 @@ function handleRemoveSeenTweetsBelow() {
   }
   lastRemoveTime = now;
 
-  const bottomThreshold = window.scrollY + window.innerHeight / 2;
+  // const bottomThreshold = window.scrollY + window.innerHeight;
+  const bottomThreshold = window.scrollY;
   const tweets = getTweets();
 
   for (let i = tweets.length - 1; i >= 0; i--) {
