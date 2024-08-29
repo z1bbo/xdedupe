@@ -88,8 +88,7 @@ function handleRemoveSeenTweetsBelow() {
   }
   lastRemoveTime = now;
 
-  // const bottomThreshold = window.scrollY + window.innerHeight;
-  const bottomThreshold = window.scrollY;
+  const bottomThreshold = window.scrollY + window.innerHeight / 3;
   const tweets = getTweets();
 
   for (let i = tweets.length - 1; i >= 0; i--) {
