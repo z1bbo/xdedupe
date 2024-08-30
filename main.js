@@ -20,7 +20,7 @@ function handleScroll() {
   const now = Date.now();
   const msSinceLastScroll = now - lastScrollTime;
 
-  if (msSinceLastScroll < 300) {
+  if (msSinceLastScroll < 200) {
     return;
   }
   const scrollDistance = window.scrollY - lastScrollY;
@@ -88,12 +88,13 @@ function handleRemoveSeenTweetsBelow() {
   }
   lastRemoveTime = now;
 
-  const bottomThreshold = window.scrollY + window.innerHeight / 3;
+  const bottomThreshold = Math.min(window.scrollY, window.innerHeight + 50);
   const tweets = getTweets();
 
-  for (let i = tweets.length - 1; i >= 0; i--) {
+  // skipping the last two since sometimes there are two-comment-long comment chains
+  for (let i = tweets.length - 3; i >= 0; i--) {
     const tweet = tweets[i];
-    const tweetTop = tweet.getBoundingClientRect().top + window.scrollY;
+    const tweetTop = tweet.getBoundingClientRect().top;
     
     if (tweetTop > bottomThreshold && hasSeen(tweet)) {
       const tweetId = getId(tweet);
