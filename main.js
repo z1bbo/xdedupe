@@ -24,7 +24,7 @@ function handleScroll() {
     return;
   }
   const scrollDistance = window.scrollY - lastScrollY;
-  if (scrollDistance * 333 / msSinceLastScroll > window.innerHeight) {
+  if (Math.abs(scrollDistance * 333 / msSinceLastScroll) > window.innerHeight) {
     lastScrollTime = now;
     lastScrollY = window.scrollY;
     return;
@@ -39,7 +39,7 @@ function handleScroll() {
 function handleScrollTweetTransition() {
   for (const tweet of oldTweets) {
     const rect = tweet.getBoundingClientRect();
-    if (rect.height > 0 && rect.width > 0 &&rect.bottom < 160) {
+    if (rect.height > 0 && rect.width > 0 && rect.bottom < 160) {
       addSeen(tweet);
     }
   }
@@ -57,7 +57,6 @@ function getTweets() {
 function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   const id = getId(tweet);
   if (id === null) {
-    console.log('cannot add seen tweet, invalid object ', tweet.innerText);
     return;
   }
   const expirationTime = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
@@ -65,7 +64,6 @@ function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   if (++newCount >= STORAGE_UPDATE_BATCH_SIZE) {
     storeSeen();
   }
-  console.log('seen', id);
 }
 
 function getId(tweet) {
@@ -91,24 +89,21 @@ function handleRemoveSeenTweetsBelow() {
 
   // skipping the last two since sometimes there are two-comment-long comment chains
   for (let i = tweets.length - 3; i >= 0; i--) {
-    const bottomThreshold = Math.min(window.scrollY, window.innerHeight + 50);
+    const bottomThreshold = Math.min(window.scrollY - 100, window.innerHeight + 100);
     const tweet = tweets[i];
     const tweetTop = tweet.getBoundingClientRect().top;
     
     if (tweetTop > bottomThreshold && hasSeen(tweet)) {
       const tweetId = getId(tweet);
+      // this is still slightly buggy when scrolling up through seen tweets with replies
+      // if the reply tweet is the first returned tweet & removed we can't set for the parent that its child got removed
       if (!isParentTweet(tweet) || childRemovedFlags.get(tweetId)) {
-        console.log('current y position', window.scrollY)
-        console.log('removing tweet ', tweetId, ' at y position ', tweetTop, 'content: ', tweet.innerText);
-        // TODO fix focus jumping even for removing below
         tweet.remove();
         
         const parentTweetId = i >= 1 ? getId(tweets[i - 1]) : null;
         if (parentTweetId !== null) {
           childRemovedFlags.set(parentTweetId, true);
         }
-      } else if (isParentTweet(tweet)) {
-        console.log('parent tweet ', tweetId, ' NOT REMOVING CUZ CHILD NOT REMOVED (TODO rem log)');
       }
     }
   }
@@ -145,7 +140,6 @@ function isParentTweet(tweet) {
 //   return authorHandle + contentHash;
 // }
 
-// TODO what if multiple tabs open in parallel? re-load on tab switch?
 function loadSeen() {
   const stored = JSON.parse(localStorage.getItem('seenTweets'));
   if (stored && Array.isArray(stored)) {
@@ -160,4 +154,5 @@ function loadSeen() {
 
 loadSeen();
 window.addEventListener('scroll', handleScroll, { passive: true });
-window.addEventListener('beforeunload', storeSeen);
+window.addEventListener('blur', storeSeen);
+window.addEventListener('focus', loadSeen);
