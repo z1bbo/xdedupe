@@ -87,19 +87,20 @@ function handleRemoveSeenTweetsBelow() {
     return;
   }
   lastRemoveTime = now;
-
-  const bottomThreshold = Math.min(window.scrollY, window.innerHeight + 50);
   const tweets = getTweets();
 
   // skipping the last two since sometimes there are two-comment-long comment chains
   for (let i = tweets.length - 3; i >= 0; i--) {
+    const bottomThreshold = Math.min(window.scrollY, window.innerHeight + 50);
     const tweet = tweets[i];
     const tweetTop = tweet.getBoundingClientRect().top;
     
     if (tweetTop > bottomThreshold && hasSeen(tweet)) {
       const tweetId = getId(tweet);
       if (!isParentTweet(tweet) || childRemovedFlags.get(tweetId)) {
+        console.log('current y position', window.scrollY)
         console.log('removing tweet ', tweetId, ' at y position ', tweetTop, 'content: ', tweet.innerText);
+        // TODO fix focus jumping even for removing below
         tweet.remove();
         
         const parentTweetId = i >= 1 ? getId(tweets[i - 1]) : null;
@@ -144,6 +145,7 @@ function isParentTweet(tweet) {
 //   return authorHandle + contentHash;
 // }
 
+// TODO what if multiple tabs open in parallel? re-load on tab switch?
 function loadSeen() {
   const stored = JSON.parse(localStorage.getItem('seenTweets'));
   if (stored && Array.isArray(stored)) {
