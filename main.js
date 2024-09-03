@@ -5,6 +5,7 @@ const DEFAULT_TTL_DAYS = 7;
 
 const seen = new Map();
 const childRemovedFlags = new Map();
+const undoneTweets = new Set();
 let newCount = 0;
 let lastScrollTime = 0;
 let oldTweets = [];
@@ -67,18 +68,21 @@ function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
 }
 
 function getId(tweet) {
-  const usernameHref = tweet.querySelector('[data-testid^="UserAvatar-Container-"]').querySelector('a[href]').href
-  const username = usernameHref.split('/').pop();
+  const username = getUsername(tweet);
   const analyticsHref = tweet.querySelector(`a[href^="/${username}/status/"][href$="/analytics"]`).href;
   const parts = analyticsHref.split('/');
   return parts[parts.length - 2];
+}
+
+function getUsername(tweet) {
+  const usernameHref = tweet.querySelector('[data-testid^="UserAvatar-Container-"]').querySelector('a[href]').href
+  return usernameHref.split('/').pop();
 }
 
 function storeSeen() {
   localStorage.setItem('seenTweets', JSON.stringify([...seen]));
   newCount = 0;
 };
-
 function handleRemoveSeenTweetsBelow() {
   const now = Date.now();
   if (now - lastRemoveTime < 2000) {
@@ -98,8 +102,8 @@ function handleRemoveSeenTweetsBelow() {
       // this is still slightly buggy when scrolling up through seen tweets with replies
       // if the reply tweet is the first returned tweet & removed we can't set for the parent that its child got removed
       if (!isParentTweet(tweet) || childRemovedFlags.get(tweetId)) {
-        tweet.remove();
-        
+        const username = getUsername(tweet);
+        replaceWithPlaceholder(tweet, tweetId, username);
         const parentTweetId = i >= 1 ? getId(tweets[i - 1]) : null;
         if (parentTweetId !== null) {
           childRemovedFlags.set(parentTweetId, true);
@@ -109,12 +113,33 @@ function handleRemoveSeenTweetsBelow() {
   }
 }
 
+function replaceWithPlaceholder(tweet, tweetId) {
+  const placeholder = tweet.cloneNode(true);
+  const namePanelParent = placeholder.firstElementChild.firstElementChild.children[1].children[1];
+  while (namePanelParent.children.length > 1) {
+    namePanelParent.removeChild(namePanelParent.lastChild);
+  }
+  const namePanel = namePanelParent.firstElementChild.firstElementChild;
+  namePanel.removeChild(namePanel.lastChild);
+  // Add Show button
+  const undoButton = document.createElement('button');
+  undoButton.innerText = 'Show';
+  undoButton.style.marginLeft = '10px';
+  undoButton.addEventListener('click', () => {
+    placeholder.replaceWith(tweet);
+    undoneTweets.add(tweetId);
+  });
+  namePanel.firstElementChild.appendChild(undoButton);
+
+  tweet.replaceWith(placeholder);
+}
+
 function hasSeen(tweet) {
   const id = getId(tweet);
   if (id === null) {
     return false;
   }
-  return !!seen.get(id);
+  return !!seen.get(id) && !undoneTweets.has(id);
 }
 
 function isParentTweet(tweet) {
