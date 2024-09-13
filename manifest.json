@@ -9,7 +9,8 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://x.com/", "https://x.com/home", "https://x.com/home*"],
+      "matches": ["https://x.com/*"],
+      "exclude_matches": ["https://x.com/notifications", "https://x.com/messages", "https://x.com/i/*", "https://x.com/settings*", "https://x.com/jobs*"],
       "js": ["main.js"],
       "run_at": "document_end"
     }
