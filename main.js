@@ -32,7 +32,7 @@ function handleScroll() {
 function handleScrollTweetTransition() {
   for (const tweet of oldTweets) {
     const rect = tweet.getBoundingClientRect();
-    if (rect.height > 0 && rect.width > 0 && rect.bottom < 160) {
+    if (rect.height > 0 && rect.width > 0 && rect.bottom < 220) {
       addSeen(tweet);
     }
   }
@@ -71,8 +71,6 @@ function getId(tweet) {
   const username = getUsername(tweet);
   // /analytics for the /home page
   // /history for e.g. the /status page
-  // this doesn't work for the top tweet at /${username}/status/{id} - which is great since we probably don't want to hide that
-  // TODO false: we do get the id of https://x.com/gdb/status/1834295775674990676
   const statusLink = tweet.querySelector(`a[href^="/${username}/status/"][href$="/analytics"], a[href^="/${username}/status/"][href$="/history"]`);
   if (statusLink === null) {
     return null;
@@ -110,34 +108,39 @@ function handleRemoveSeenTweetsBelow() {
 function replaceWithPlaceholder(tweet, tweetId) {
   const placeholder = tweet.cloneNode(true);
   placeholder.removeAttribute('data-testid');
-  const faceDiv = placeholder.firstElementChild.firstElementChild.children[1].firstElementChild.firstElementChild;
-  faceDiv.style.transformOrigin = 'scale(0.7)';
-  faceDiv.style.transformOrigin = 'center';
-  
-  const namePanelParent = placeholder.firstElementChild.firstElementChild.children[1].children[1];
+  const outer = placeholder.firstChild.firstChild
+  // remove empty margin div at the top
+  outer.removeChild(outer.firstChild);
+  const inner = outer.firstChild;
+  const namePanelParent = inner.children[1];
   while (namePanelParent.children.length > 1) {
     namePanelParent.removeChild(namePanelParent.lastChild);
   }
   const namePanel = namePanelParent.firstElementChild.firstElementChild;
   namePanel.removeChild(namePanel.lastChild);
   const viewButton = document.createElement('span');
-  viewButton.style.fontFamily = 'serif';
-  viewButton.style.fontSize = 'inherit';
-  viewButton.innerHTML = 'View';
-  // test: remove display inlineBlock, background-color: transparent;
-  viewButton.style.cssText = 'transition: background-color 0.1s ease; cursor: pointer; padding: 10px 10px;';
+  viewButton.innerHTML = '<strong>View</strong>';
+  viewButton.style.cssText = 'font-family: serif; transition: background-color 0.1s ease; cursor: pointer; padding: 2px 9px;';
   viewButton.addEventListener('mouseover', () => {
     viewButton.style.backgroundColor = 'lightgrey';
   });
   viewButton.addEventListener('mouseout', () => {
     viewButton.style.backgroundColor = 'transparent';
   });
-  viewButton.addEventListener('click', () => {
+  placeholder.addEventListener('click', (event) => {
+    event.preventDefault();
     placeholder.replaceWith(tweet);
     undoneTweets.add(tweetId);
   });
 
   namePanel.appendChild(viewButton);
+
+  const faceDiv = inner.firstChild.firstChild;
+  faceDiv.style.transform = 'scale(0.7)';
+  faceDiv.style.transformOrigin = 'center';
+
+  inner.lastChild.style.paddingBottom = '0px';
+
   tweet.replaceWith(placeholder);
 }
 
