@@ -1,32 +1,77 @@
-const STORAGE_UPDATE_BATCH_SIZE = 20;
+const STORAGE_UPDATE_BATCH_SIZE = 10;
+// TODO next version: make TTL days configurable
 const DEFAULT_TTL_DAYS = 7;
+const INTERVAL_MS = 80;
+
+let db;
+var indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+const dbName = "SeenTweets";
+const storeName = "seen_tweets";
+const dbVersion = 1;
+
+const openDBRequest = indexedDB.open(dbName, dbVersion);
+
+openDBRequest.onerror = function(event) {
+  console.error("Database error: " + event.target.error);
+};
+
+openDBRequest.onsuccess = function(event) {
+  db = event.target.result;
+  console.log("Database opened successfully");
+};
+
+openDBRequest.onupgradeneeded = function(event) {
+  db = event.target.result;
+  db.createObjectStore(storeName, { keyPath: "id" });
+  console.log("Object store created");
+};
 
 const seen = new Map();
 const undoneTweets = new Set();
 let newCount = 0;
 let lastScrollTime = 0;
 let oldTweets = [];
-let lastScrollY = 0;
+
+function loadSeen() {
+  return new Promise((resolve, reject) => {
+    console.log("starting loadSeen");
+    const transaction = db.transaction([storeName], "readwrite");
+    const objectStore = transaction.objectStore(storeName);
+    const now = Date.now();
+
+      let taken = 0;
+      let deled = 0;
+    objectStore.openCursor().onsuccess = function(event) {
+      const cursor = event.target.result;
+      if (cursor) {
+        if (cursor.value.expire_at > now) {
+          seen.set(cursor.value.id, cursor.value.expire_at);
+          taken++;
+        } else {
+          cursor.delete();
+          deled++;
+        }
+        cursor.continue();
+      } else {
+        console.log("loaded ", taken, " deleted ", deled);
+        resolve(seen);
+      }
+    };
+
+    transaction.onerror = function(event) {
+      reject("Transaction error: " + event.target.error);
+    };
+  });
+}
 
 function handleScroll() {
   const now = Date.now();
-  const msSinceLastScroll = now - lastScrollTime;
-
-  if (msSinceLastScroll < 80) {
+  if (now - lastScrollTime < INTERVAL_MS) {
     return;
   }
-  // always remove below seen tweets for all scroll styles
   lastScrollTime = now;
   handleRemoveSeenTweetsBelow();
-
-  const scrollDistance = window.scrollY - lastScrollY;
-  if (Math.abs(scrollDistance * 300 / msSinceLastScroll) > window.innerHeight) {
-    lastScrollY = window.scrollY;
-    return;
-  }
-  // only mark as seen for not-too-fast/normal scrolling
   handleScrollTweetTransition();
-  lastScrollY = window.scrollY;
 }
 
 function handleScrollTweetTransition() {
@@ -60,11 +105,22 @@ function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   }
     // TODO remove log once finished debugging all pages
   console.log("seen ", id);
-  const expirationTime = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
-  seen.set(id, expirationTime);
-  if (++newCount >= STORAGE_UPDATE_BATCH_SIZE) {
-    storeSeen();
-  }
+  const expireAt = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
+  seen.set(id, expireAt);
+
+  new Promise((resolve, reject) => {
+    const transaction = db.transaction([storeName], "readwrite");
+    const objectStore = transaction.objectStore(storeName);
+    const request = objectStore.put({ id: id, expire_at: expireAt });
+
+    request.onerror = function(event) {
+      reject("Error adding/updating record: " + event.target.error);
+    };
+
+    request.onsuccess = function(event) {
+      resolve("Record added/updated successfully");
+    };
+  });
 }
 
 function getId(tweet) {
@@ -83,11 +139,6 @@ function getUsername(tweet) {
   const usernameHref = tweet.querySelector('[data-testid^="UserAvatar-Container-"]').querySelector('a[href]').href
   return usernameHref.split('/').pop();
 }
-
-function storeSeen() {
-  localStorage.setItem('seenTweets', JSON.stringify([...seen]));
-  newCount = 0;
-};
 
 function handleRemoveSeenTweetsBelow() {
   const tweets = getTweets();
@@ -151,20 +202,7 @@ function hasSeen(id) {
   return !!seen.get(id) && !undoneTweets.has(id);
 }
 
-function loadSeen() {
-  const stored = JSON.parse(localStorage.getItem('seenTweets'));
-  if (stored && Array.isArray(stored)) {
-    const now = Date.now();
-    stored.forEach(([id, expirationTime]) => {
-      if (expirationTime > now) {
-        seen.set(id, expirationTime);
-      }
-    });
-  }
-}
-
 loadSeen();
 window.addEventListener('scroll', handleScroll, { passive: true });
-window.addEventListener('blur', storeSeen);
 window.addEventListener('focus', loadSeen);
 window.addEventListener('focus', handleScroll, { passive: true });
