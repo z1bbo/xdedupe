@@ -9,26 +9,31 @@ const dbName = "SeenTweets";
 const storeName = "seen_tweets";
 const dbVersion = 1;
 
-const openDBRequest = indexedDB.open(dbName, dbVersion);
+function initializeDB() {
+  return new Promise((resolve, reject) => {
+    const openDBRequest = indexedDB.open(dbName, dbVersion);
 
-openDBRequest.onerror = function(event) {
-  console.error("Database error: " + event.target.error);
-};
+    openDBRequest.onerror = function(event) {
+      console.error("Database error: " + event.target.error);
+      reject(event.target.error);
+    };
 
-openDBRequest.onsuccess = function(event) {
-  db = event.target.result;
-  console.log("Database opened successfully");
-};
+    openDBRequest.onsuccess = function(event) {
+      db = event.target.result;
+      console.log("Database opened successfully");
+      resolve(db);
+    };
 
-openDBRequest.onupgradeneeded = function(event) {
-  db = event.target.result;
-  db.createObjectStore(storeName, { keyPath: "id" });
-  console.log("Object store created");
-};
+    openDBRequest.onupgradeneeded = function(event) {
+      db = event.target.result;
+      db.createObjectStore(storeName, { keyPath: "id" });
+      console.log("Object store created");
+    };
+  });
+}
 
 const seen = new Map();
 const undoneTweets = new Set();
-let newCount = 0;
 let lastScrollTime = 0;
 let oldTweets = [];
 
@@ -202,7 +207,13 @@ function hasSeen(id) {
   return !!seen.get(id) && !undoneTweets.has(id);
 }
 
-loadSeen();
-window.addEventListener('scroll', handleScroll, { passive: true });
-window.addEventListener('focus', loadSeen);
-window.addEventListener('focus', handleScroll, { passive: true });
+initializeDB().then(() => {
+  loadSeen().then(() => {
+    console.log("Initialization complete, script is ready");
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('focus', loadSeen);
+    window.addEventListener('focus', handleScroll, { passive: true });
+  });
+}).catch(error => {
+  console.error("Failed to initialize the database:", error);
+});
