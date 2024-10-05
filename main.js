@@ -107,8 +107,6 @@ function getTweets() {
 function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   const id = getId(tweet);
   if (id === null) {
-    // TODO remove log once finished debugging all pages
-    console.log(`weird, cannot get ID: ${JSON.stringify(tweet)}`);
     return;
   }
     // TODO remove log once finished debugging all pages
@@ -164,43 +162,60 @@ function handleRemoveSeenTweetsBelow(tweets) {
 }
 
 function replaceWithPlaceholder(tweet, tweetId) {
-  const placeholder = tweet.cloneNode(true);
-  placeholder.removeAttribute('data-testid');
-  const outer = placeholder.firstChild.firstChild
-  // remove empty margin div at the top
-  outer.removeChild(outer.firstChild);
-  const inner = outer.firstChild;
+  const originalDataTestid = tweet.getAttribute('data-testid');
+  tweet.removeAttribute('data-testid');
+  const hidden = [];
+  const outer = tweet.firstChild.firstChild;
+  hide(outer.firstChild, hidden);
+  const inner = outer.lastChild;
   const namePanelParent = inner.children[1];
-  while (namePanelParent.children.length > 1) {
-    namePanelParent.removeChild(namePanelParent.lastChild);
+  for (let i = 1; i < namePanelParent.children.length; i++) {
+    hide(namePanelParent.children[i], hidden);
   }
   const namePanel = namePanelParent.firstElementChild.firstElementChild;
-  namePanel.removeChild(namePanel.lastChild);
+  hide(namePanel.lastChild, hidden);
+
   const viewButton = document.createElement('span');
   viewButton.innerHTML = '<strong>View</strong>';
-  viewButton.style.cssText = 'font-family: serif; transition: background-color 0.1s ease; cursor: pointer; padding: 2px 9px;';
+  viewButton.style.cssText = `
+    font-family: serif;
+    transition: background-color 0.1s ease;
+    cursor: pointer;
+    padding: 2px 9px;
+  `;
   viewButton.addEventListener('mouseover', () => {
     viewButton.style.backgroundColor = 'lightgrey';
   });
   viewButton.addEventListener('mouseout', () => {
     viewButton.style.backgroundColor = 'transparent';
   });
-  placeholder.addEventListener('click', (event) => {
+
+  const faceDiv = inner.firstChild.firstChild;
+  const originalInnerBottomPadding = window.getComputedStyle(inner.lastChild).paddingBottom;
+  faceDiv.style.transform = 'scale(0.7)';
+  faceDiv.style.transformOrigin = 'center';
+  inner.lastChild.style.paddingBottom = '0px';
+
+  tweet.addEventListener('click', function restoreTweet(event) {
     event.preventDefault();
-    placeholder.replaceWith(tweet);
+    viewButton.remove();
+    hidden.forEach(node => node.style.display = '');
+    tweet.setAttribute('data-testid', originalDataTestid);
+    faceDiv.style.transform = 'scale(1.0)';
+    inner.lastChild.style.paddingBottom = originalInnerBottomPadding;
     undoneTweets.add(tweetId);
+    tweet.removeEventListener('click', restoreTweet);
   });
 
   namePanel.appendChild(viewButton);
-
-  const faceDiv = inner.firstChild.firstChild;
-  faceDiv.style.transform = 'scale(0.7)';
-  faceDiv.style.transformOrigin = 'center';
-
-  inner.lastChild.style.paddingBottom = '0px';
-
-  tweet.replaceWith(placeholder);
 }
+
+function hide(node, hidden) {
+  node.style.display = 'none';
+  hidden.push(node)
+}
+
+// TODO check if I'm causing "This site appears to use a scroll-linked positioning effect. This may not work well with asynchronous panning; see https://firefox-source-docs.mozilla.org/performance/scroll-linked_effects.html for further details and to join the discussion on related tools and features!"
 
 function hasSeen(id) {
   if (id === null) {
