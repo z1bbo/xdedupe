@@ -59,6 +59,7 @@ function loadSeen() {
         cursor.continue();
       } else {
         console.log("loaded ", taken, " deleted ", deled);
+        console.log("db load took ms:", Date.now() - now);
         resolve(seen);
       }
     };
@@ -72,21 +73,23 @@ function loadSeen() {
 function handleScroll() {
   const now = Date.now();
   if (now - lastScrollTime < INTERVAL_MS) {
-    return;
+    return false;
   }
   lastScrollTime = now;
-  handleRemoveSeenTweetsBelow();
-  handleScrollTweetTransition();
+  const tweets = getTweets();
+  handleRemoveSeenTweetsBelow(tweets);
+  handleScrollTweetTransition(tweets);
+  return tweets.length > 0;
 }
 
-function handleScrollTweetTransition() {
+function handleScrollTweetTransition(newTweets) {
   for (const tweet of oldTweets) {
     const rect = tweet.getBoundingClientRect();
     if (rect.height > 0 && rect.width > 0 && rect.bottom < 220) {
       addSeen(tweet);
     }
   }
-  oldTweets = getTweets();
+  oldTweets = newTweets;
 }
 
 function getTweets() {
@@ -145,8 +148,7 @@ function getUsername(tweet) {
   return usernameHref.split('/').pop();
 }
 
-function handleRemoveSeenTweetsBelow() {
-  const tweets = getTweets();
+function handleRemoveSeenTweetsBelow(tweets) {
   // don't hide the top tweet on the /status/{id} page
   var i = window.location.href.match(/^https:\/\/x\.com\/\w+\/status\/\d+$/) ? 1 : 0;
   for (; i < tweets.length; i++) {
@@ -210,6 +212,14 @@ function hasSeen(id) {
 initializeDB().then(() => {
   loadSeen().then(() => {
     console.log("Initialization complete, script is ready");
+    (function tryInitialInvocationUntilLoaded() {
+      console.log("calling an intial handleScroll");
+      if (!handleScroll()) {
+        setTimeout(tryInitialInvocationUntilLoaded, 500);
+      } else {
+        console.log("DONE first handle scroll");
+      }
+    })();
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('focus', loadSeen);
     window.addEventListener('focus', handleScroll, { passive: true });
