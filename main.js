@@ -4,7 +4,7 @@ const DEFAULT_TTL_DAYS = 7;
 const INTERVAL_MS = 80;
 
 let db;
-var indexedDB = window.indexedDB || window.mozIndexedDB || window.webkitIndexedDB || window.msIndexedDB || window.shimIndexedDB;
+var indexedDB = window.indexedDB;
 const dbName = "SeenTweets";
 const storeName = "seen_tweets";
 const dbVersion = 1;
@@ -34,7 +34,6 @@ function initializeDB() {
 
 const seen = new Map();
 const undoneTweets = new Set();
-let lastScrollTime = 0;
 let oldTweets = [];
 
 function loadSeen() {
@@ -70,19 +69,19 @@ function loadSeen() {
   });
 }
 
-function handleScroll() {
-  const now = Date.now();
-  if (now - lastScrollTime < INTERVAL_MS) {
-    return false;
-  }
-  lastScrollTime = now;
+function addAndHideSeen() {
   const tweets = getTweets();
-  handleRemoveSeenTweetsBelow(tweets);
-  handleScrollTweetTransition(tweets);
+  hideSeenTweetsBelow(tweets);
+  markScrolledByTweetsSeen(tweets);
   return tweets.length > 0;
 }
 
-function handleScrollTweetTransition(newTweets) {
+function getTweets() {
+  const tweets = document.querySelectorAll('article[role="article"][data-testid="tweet"]');
+  return Array.from(tweets).filter(tweet => tweet.getBoundingClientRect().bottom >= 140);
+}
+
+function markScrolledByTweetsSeen(newTweets) {
   for (const tweet of oldTweets) {
     const rect = tweet.getBoundingClientRect();
     if (rect.height > 0 && rect.width > 0 && rect.bottom < 220) {
@@ -92,40 +91,17 @@ function handleScrollTweetTransition(newTweets) {
   oldTweets = newTweets;
 }
 
-function getTweets() {
-  const tweets = document.querySelectorAll('article[role="article"][data-testid="tweet"]');
-  // all tweets below the current scroll position, where still at least a part is visible at the bottom
-  return Array.from(tweets)
-    .reduce((acc, tweet) => {
-      if (acc.length > 0 || tweet.getBoundingClientRect().bottom >= 160) {
-        acc.push(tweet);
-      }
-      return acc;
-    }, []);
-}
-
 function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   const id = getId(tweet);
   if (id === null) {
     return;
   }
-    // TODO remove log once finished debugging all pages
-  console.log("seen ", id);
   const expireAt = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
   seen.set(id, expireAt);
-
-  new Promise((resolve, reject) => {
+  new Promise(() => {
     const transaction = db.transaction([storeName], "readwrite");
     const objectStore = transaction.objectStore(storeName);
-    const request = objectStore.put({ id: id, expire_at: expireAt });
-
-    request.onerror = function(event) {
-      reject("Error adding/updating record: " + event.target.error);
-    };
-
-    request.onsuccess = function(event) {
-      resolve("Record added/updated successfully");
-    };
+    objectStore.put({ id: id, expire_at: expireAt });
   });
 }
 
@@ -146,14 +122,13 @@ function getUsername(tweet) {
   return usernameHref.split('/').pop();
 }
 
-function handleRemoveSeenTweetsBelow(tweets) {
+function hideSeenTweetsBelow(tweets) {
   // don't hide the top tweet on the /status/{id} page
   var i = window.location.href.match(/^https:\/\/x\.com\/\w+\/status\/\d+$/) ? 1 : 0;
   for (; i < tweets.length; i++) {
-    const bottomThreshold = Math.min(window.scrollY - 100, window.innerHeight + 50);
+    const bottomThreshold = 140;
     const tweet = tweets[i];
     const tweetTop = tweet.getBoundingClientRect().top;
-    
     const id = getId(tweet);
     if (tweetTop > bottomThreshold && hasSeen(id)) {
       replaceWithPlaceholder(tweet, id);
@@ -176,12 +151,13 @@ function replaceWithPlaceholder(tweet, tweetId) {
   hide(namePanel.lastChild, hidden);
 
   const viewButton = document.createElement('span');
-  viewButton.innerHTML = '<strong>View</strong>';
+  viewButton.innerHTML = 'View';
   viewButton.style.cssText = `
-    font-family: serif;
+    font-family: "TwitterChirp";
+    font-size: 0.9em;
     transition: background-color 0.1s ease;
     cursor: pointer;
-    padding: 2px 9px;
+    padding: 2px 0px;
   `;
   viewButton.addEventListener('mouseover', () => {
     viewButton.style.backgroundColor = 'lightgrey';
@@ -215,8 +191,6 @@ function hide(node, hidden) {
   hidden.push(node)
 }
 
-// TODO check if I'm causing "This site appears to use a scroll-linked positioning effect. This may not work well with asynchronous panning; see https://firefox-source-docs.mozilla.org/performance/scroll-linked_effects.html for further details and to join the discussion on related tools and features!"
-
 function hasSeen(id) {
   if (id === null) {
     return false;
@@ -226,19 +200,8 @@ function hasSeen(id) {
 
 initializeDB().then(() => {
   loadSeen().then(() => {
-    console.log("Initialization complete, script is ready");
-    (function tryInitialInvocationUntilLoaded() {
-      console.log("calling an intial handleScroll");
-      if (!handleScroll()) {
-        setTimeout(tryInitialInvocationUntilLoaded, 500);
-      } else {
-        console.log("DONE first handle scroll");
-      }
-    })();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('focus', loadSeen);
-    window.addEventListener('focus', handleScroll, { passive: true });
+    setInterval(addAndHideSeen, 900);
+    window.addEventListener('focus', loadSeen, { passive: true });
+    window.addEventListener('focus', addAndHideSeen, { passive: true });
   });
-}).catch(error => {
-  console.error("Failed to initialize the database:", error);
 });
