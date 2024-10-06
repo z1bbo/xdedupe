@@ -219,10 +219,10 @@ function stopExtension() {
 
 function toggleExtension(active) {
   console.log("toggle got triggered, value", active);
-  if (active === null || active === "true") {
-    startExtension();
-  } else {
+  if (active === "false") {
     stopExtension();
+  } else {
+    startExtension();
   }
 }
 
