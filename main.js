@@ -1,7 +1,5 @@
-const STORAGE_UPDATE_BATCH_SIZE = 10;
 // TODO next version: make TTL days configurable
 const DEFAULT_TTL_DAYS = 7;
-const INTERVAL_MS = 80;
 
 let db;
 var indexedDB = window.indexedDB;
