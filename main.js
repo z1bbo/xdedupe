@@ -10,24 +10,17 @@ const storeName = "seen_tweets";
 const dbVersion = 1;
 
 function initializeDB() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _) => {
     const openDBRequest = indexedDB.open(dbName, dbVersion);
-
-    openDBRequest.onerror = function(event) {
-      console.error("Database error: " + event.target.error);
-      reject(event.target.error);
-    };
 
     openDBRequest.onsuccess = function(event) {
       db = event.target.result;
-      console.log("Database opened successfully");
       resolve(db);
     };
 
     openDBRequest.onupgradeneeded = function(event) {
       db = event.target.result;
       db.createObjectStore(storeName, { keyPath: "id" });
-      console.log("Object store created");
     };
   });
 }
@@ -38,7 +31,6 @@ let oldTweets = [];
 
 function loadSeen() {
   return new Promise((resolve, reject) => {
-    console.log("starting loadSeen");
     const transaction = db.transaction([storeName], "readwrite");
     const objectStore = transaction.objectStore(storeName);
     const now = Date.now();
@@ -57,14 +49,8 @@ function loadSeen() {
         }
         cursor.continue();
       } else {
-        console.log("loaded ", taken, " deleted ", deled);
-        console.log("db load took ms:", Date.now() - now);
         resolve(seen);
       }
-    };
-
-    transaction.onerror = function(event) {
-      reject("Transaction error: " + event.target.error);
     };
   });
 }
@@ -203,7 +189,7 @@ let intervalId = null;
 async function startExtension() {
   await initializeDB();
   await loadSeen();
-  intervalId = setInterval(addAndHideSeen, 900);
+  intervalId = setInterval(addAndHideSeen, 800);
   window.addEventListener('focus', loadSeen, { passive: true });
   window.addEventListener('focus', addAndHideSeen, { passive: true });
 }
@@ -218,7 +204,6 @@ function stopExtension() {
 }
 
 function toggleExtension(active) {
-  console.log("toggle got triggered, value", active);
   if (active === "false") {
     stopExtension();
   } else {
@@ -227,13 +212,10 @@ function toggleExtension(active) {
 }
 
 browser.storage.local.get('xdedupeActive').then((result) => {
-  console.log("startup trigger browser.storage.local.get('xdedupeActive')");
-  console.log("value", result.xdedupeActive);
   toggleExtension(result.xdedupeActive);
 });
 
 browser.storage.onChanged.addListener((changes, area) => {
-  console.log("listenger triggered, area", area, "changes", changes);
   if (area === 'local' && 'xdedupeActive' in changes) {
     toggleExtension(changes.xdedupeActive.newValue);
   }
