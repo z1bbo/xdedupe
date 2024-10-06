@@ -198,10 +198,43 @@ function hasSeen(id) {
   return !!seen.get(id) && !undoneTweets.has(id);
 }
 
-initializeDB().then(() => {
-  loadSeen().then(() => {
-    setInterval(addAndHideSeen, 900);
-    window.addEventListener('focus', loadSeen, { passive: true });
-    window.addEventListener('focus', addAndHideSeen, { passive: true });
-  });
+let intervalId = null;
+
+async function startExtension() {
+  await initializeDB();
+  await loadSeen();
+  intervalId = setInterval(addAndHideSeen, 900);
+  window.addEventListener('focus', loadSeen, { passive: true });
+  window.addEventListener('focus', addAndHideSeen, { passive: true });
+}
+
+function stopExtension() {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  window.removeEventListener('focus', loadSeen, { passive: true });
+  window.removeEventListener('focus', addAndHideSeen, { passive: true });
+}
+
+function toggleExtension(active) {
+  console.log("toggle got triggered, value", active);
+  if (active === null || active === "true") {
+    startExtension();
+  } else {
+    stopExtension();
+  }
+}
+
+browser.storage.local.get('xdedupeActive').then((result) => {
+  console.log("startup trigger browser.storage.local.get('xdedupeActive')");
+  console.log("value", result.xdedupeActive);
+  toggleExtension(result.xdedupeActive);
+});
+
+browser.storage.onChanged.addListener((changes, area) => {
+  console.log("listenger triggered, area", area, "changes", changes);
+  if (area === 'local' && 'xdedupeActive' in changes) {
+    toggleExtension(changes.xdedupeActive.newValue);
+  }
 });
