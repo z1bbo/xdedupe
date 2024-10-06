@@ -4,7 +4,7 @@ Never see the same tweet twice in a row! XDedupe minifies and hides duplicate tw
 
 Once you scroll by a tweet, it gets stored as seen in indexedDb, i.e. locally on your browser. Then it minifies all tweets that you have already seen, everywhere below your current scroll position. One exception: The top tweet on the `/{user}/status/{id}` page doesn't get hidden.
 
-Clicking on a minified tweet will restore it to the orignal tweet, and this tweet will not be re-hidden for this session.
+Clicking on a minified tweet will restore it to the original tweet, and this tweet will not be re-hidden for this session.
 
 If you have any questions/issues, please feel free to contact me or create an issue/PR etc.!
 

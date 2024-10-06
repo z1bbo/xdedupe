@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "XDedupe",
   "version": "0.1",
-  "description": "Never get the same tweet recommended twice! Deduplicates your X timeline by removing already seen tweets.",
+  "description": "Never see the same tweet twice in a row! Deduplicates your X timeline by hiding already seen tweets.",
   "permissions": [
     "activeTab",
     "storage"
@@ -28,5 +28,10 @@
   "icons": {
     "48": "icons/icon-48.png",
     "96": "icons/icon-96.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{b0088626-ecfa-46cf-c39e-09a39dad243c}"
+    }
   }
 }
