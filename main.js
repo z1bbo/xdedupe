@@ -9,16 +9,19 @@ const dbVersion = 1;
 
 function initializeDB() {
   return new Promise((resolve, _) => {
+    console.log('calling indexedDB.open with', dbName, dbVersion);
     const openDBRequest = indexedDB.open(dbName, dbVersion);
 
     openDBRequest.onsuccess = function(event) {
       db = event.target.result;
+      console.log('indexedDB.open success, db is', db);
       resolve(db);
     };
 
     openDBRequest.onupgradeneeded = function(event) {
       db = event.target.result;
       db.createObjectStore(storeName, { keyPath: "id" });
+      console.log('indexedDB.open upgradeneeded, db is', db);
     };
   });
 }
@@ -33,16 +36,27 @@ function loadSeen() {
     const objectStore = transaction.objectStore(storeName);
     const now = Date.now();
 
+    let taken = 0;
+    let deleted = 0;
+    const allLoadedIds = [];
     objectStore.openCursor().onsuccess = function(event) {
       const cursor = event.target.result;
       if (cursor) {
         if (cursor.value.expire_at > now) {
           seen.set(cursor.value.id, cursor.value.expire_at);
+          allLoadedIds.push(cursor.value.id);
+          taken++;
         } else {
           cursor.delete();
+          deleted++;
         }
         cursor.continue();
       } else {
+        console.log(`XDedupe: Loaded ${taken} seen tweets from IndexedDB, deleted ${deleted} expired tweets`);
+        console.log(`XDedupe: Current seen tweets map size: ${seen.size}`);
+        if (allLoadedIds.length > 0) {
+          console.log(`XDedupe: Sample loaded tweet IDs:`, allLoadedIds.slice(-5));
+        }
         resolve(seen);
       }
     };
@@ -51,6 +65,7 @@ function loadSeen() {
 
 function addAndHideSeen() {
   const tweets = getTweets();
+  console.log(`XDedupe: Processing ${tweets.length} visible tweets, seen map has ${seen.size} entries`);
   hideSeenTweetsBelow(tweets);
   markScrolledByTweetsSeen(tweets);
   return tweets.length > 0;
@@ -62,11 +77,16 @@ function getTweets() {
 }
 
 function markScrolledByTweetsSeen(newTweets) {
+  let markedCount = 0;
   for (const tweet of oldTweets) {
     const rect = tweet.getBoundingClientRect();
     if (rect.height > 0 && rect.width > 0 && rect.bottom < 220) {
       addSeen(tweet);
+      markedCount++;
     }
+  }
+  if (markedCount > 0) {
+    console.log(`XDedupe: Marked ${markedCount} scrolled-by tweets as seen`);
   }
   oldTweets = newTweets;
 }
@@ -74,14 +94,22 @@ function markScrolledByTweetsSeen(newTweets) {
 function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   const id = getId(tweet);
   if (id === null) {
+    console.log('XDedupe: Could not get ID for tweet, skipping save');
     return;
   }
   const expireAt = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
   seen.set(id, expireAt);
+  console.log(`XDedupe: Saving individual tweet ID: ${id}, seen map size now: ${seen.size}`);
   new Promise(() => {
     const transaction = db.transaction([storeName], "readwrite");
     const objectStore = transaction.objectStore(storeName);
     const putRequest = objectStore.put({ id: id, expire_at: expireAt });
+    putRequest.onsuccess = () => {
+      console.log(`XDedupe: Successfully saved tweet ID ${id} to IndexedDB`);
+    };
+    putRequest.onerror = (error) => {
+      console.error(`XDedupe: Error saving tweet ID ${id} to IndexedDB:`, error);
+    };
   });
 }
 
@@ -181,6 +209,7 @@ function hasSeen(id) {
 let intervalId = null;
 
 async function startExtension() {
+  console.log('startExtension called');
   await initializeDB();
   await loadSeen();
   intervalId = setInterval(addAndHideSeen, 800);
@@ -189,6 +218,7 @@ async function startExtension() {
 }
 
 function stopExtension() {
+  console.log('stopExtension called');
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
@@ -198,6 +228,7 @@ function stopExtension() {
 }
 
 function toggleExtension(active) {
+  console.log('toggleExtension called with', active);
   if (active === "false") {
     stopExtension();
   } else {
@@ -213,13 +244,16 @@ backend.runtime.sendMessage({
   action: 'getStorage',
   key: 'xdedupeActive'
 }).then((result) => {
+  console.log('got initial result from runtime.sendMessage, toggling', result);
   toggleExtension(result.xdedupeActive);
 }).catch((error) => {
+  console.log('XDedupe: Could not get storage, defaulting to inactive');
   toggleExtension('false');
 });
 
 // Listen for storage changes from background script
 backend.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('listener for runtime.onMessage triggered', request);
   if (request.action === 'storageChanged' && 'xdedupeActive' in request.changes) {
     toggleExtension(request.changes.xdedupeActive.newValue);
   }
