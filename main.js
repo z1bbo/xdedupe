@@ -33,17 +33,13 @@ function loadSeen() {
     const objectStore = transaction.objectStore(storeName);
     const now = Date.now();
 
-      let taken = 0;
-      let deled = 0;
     objectStore.openCursor().onsuccess = function(event) {
       const cursor = event.target.result;
       if (cursor) {
         if (cursor.value.expire_at > now) {
           seen.set(cursor.value.id, cursor.value.expire_at);
-          taken++;
         } else {
           cursor.delete();
-          deled++;
         }
         cursor.continue();
       } else {
@@ -85,7 +81,7 @@ function addSeen(tweet, ttlDays = DEFAULT_TTL_DAYS) {
   new Promise(() => {
     const transaction = db.transaction([storeName], "readwrite");
     const objectStore = transaction.objectStore(storeName);
-    objectStore.put({ id: id, expire_at: expireAt });
+    const putRequest = objectStore.put({ id: id, expire_at: expireAt });
   });
 }
 
@@ -209,12 +205,22 @@ function toggleExtension(active) {
   }
 }
 
-browser.storage.local.get('xdedupeActive').then((result) => {
+// browser for Firefox, chrome for Chrome
+const backend = (typeof browser !== 'undefined') ? browser : chrome;
+
+// Get initial storage value via message passing
+backend.runtime.sendMessage({
+  action: 'getStorage',
+  key: 'xdedupeActive'
+}).then((result) => {
   toggleExtension(result.xdedupeActive);
+}).catch((error) => {
+  toggleExtension('false');
 });
 
-browser.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && 'xdedupeActive' in changes) {
-    toggleExtension(changes.xdedupeActive.newValue);
+// Listen for storage changes from background script
+backend.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'storageChanged' && 'xdedupeActive' in request.changes) {
+    toggleExtension(request.changes.xdedupeActive.newValue);
   }
 });

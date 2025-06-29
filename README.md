@@ -26,3 +26,8 @@ magick gray.png    \( -size 48x24 xc:'rgba(128,128,128,0.7)'      -gravity cente
 magick icon-96.png -colorspace Gray gray.png 
 magick gray.png    \( -size 96x48 xc:'rgba(128,128,128,0.7)'      -gravity center -fill white -font Arial-Bold -pointsize 40 -annotate +0+0 'OFF' \)   -gravity northeast -composite gray-icon-96.png
 ```
+
+### Recreating the release zip
+```
+rm -f xdedupe.zip && zip -r xdedupe.zip background.js main.js manifest.json README.md icons/
+```
